@@ -37,18 +37,18 @@ int main(void) {
 
     printf("listening on port 8080 (listen_fd = %d)\n", listen_fd);
 
-    struct sockaddr_in client;
-    socklen_t client_len = sizeof(client);
+    struct sockaddr_in client_addr;
+    socklen_t client_len = sizeof(client_addr);
 
-    int conn_fd = accept(listen_fd, (struct sockaddr *)&client, &client_len);
+    int conn_fd = accept(listen_fd, (struct sockaddr *)&client_addr, &client_len);
     if (conn_fd < 0) {
         perror("accept");
         exit(1);
     }
 
     printf("client connected from %s:%d (conn_fd = %d)\n",
-           inet_ntoa(client.sin_addr),
-           ntohs(client.sin_port),
+           inet_ntoa(client_addr.sin_addr),
+           ntohs(client_addr.sin_port),
            conn_fd);
 
     close(conn_fd);

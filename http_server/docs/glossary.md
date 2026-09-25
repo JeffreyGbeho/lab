@@ -22,6 +22,48 @@ Because files, pipes, terminals and sockets are all file descriptors, the same
 `read()` / `write()` / `close()` calls work on all of them. That uniformity is
 why a network server in C looks like file I/O.
 
+## Client
+
+A **role**, not a kind of program. The client is whoever called `connect()`; the
+server is whoever called `listen()` and `accept()`. That is the whole distinction,
+and it only applies while the connection is being set up. Afterwards TCP is
+perfectly symmetric: both ends hold a file descriptor and both use the same
+`read()` / `write()` / `close()` calls. Nothing on the wire marks which end is
+which, and `ss` prints one row per end with identical shape.
+
+Three different things get called "the client", and only the third one exists
+inside the program:
+
+| What | Where it lives | What can be done with it |
+|------|----------------|--------------------------|
+| the client *program* (curl, `nc`, a browser, a script) | another process, maybe another machine | nothing — it is never seen, its name and PID are unknowable |
+| the *connection* | in the kernel, identified by the 4-tuple `client_ip:port -> server_ip:port` | nothing directly; the kernel owns it |
+| `conn_fd`, the *handle* on that connection | this process only | `read`, `write`, `close` |
+
+**In the code, the client is `conn_fd`** — a single integer. There is no client
+object and no session. Proof: curl, `nc` and a Python script connecting in turn
+produce byte-for-byte identical server output apart from the
+[ephemeral port](#ephemeral-port). The program cannot tell them apart because it
+never receives a program, only a file descriptor.
+
+`struct sockaddr_in client_addr` is **not** the client. It holds six bytes — a
+4-byte IP and a 2-byte port — describing where the other end is. It is caller ID,
+not the caller. Passing `NULL, NULL` to `accept()` instead drops it entirely and
+changes nothing about the server's behaviour.
+
+### The client has no memory
+
+After `close(conn_fd)` nothing about that client remains in the program. The fd
+number is recycled and means nothing; the next client will probably be handed 4
+again. A server looping over twenty requests cannot know whether that was twenty
+people or one person twenty times.
+
+This is why HTTP has no memory of who anyone is. The TCP connection is the only
+thread of identity that exists, and closing it cuts that thread. Cookies, sessions
+and tokens all exist to rebuild an identity the layer underneath discards every
+time. Keep-alive (step 15) lets one `conn_fd` survive several requests, but that is
+still not identity — only a connection that has not hung up yet.
+
 ## Network byte order
 
 The order in which the bytes of a multi-byte integer are laid out in memory.

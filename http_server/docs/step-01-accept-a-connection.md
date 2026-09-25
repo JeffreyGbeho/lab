@@ -10,25 +10,25 @@ hang up on them, exit. Still no byte is read and no byte is written.
 ## The code
 
 ```c
-struct sockaddr_in client;
-socklen_t client_len = sizeof(client);
+struct sockaddr_in client_addr;
+socklen_t client_len = sizeof(client_addr);
 
-int conn_fd = accept(listen_fd, (struct sockaddr *)&client, &client_len);
+int conn_fd = accept(listen_fd, (struct sockaddr *)&client_addr, &client_len);
 if (conn_fd < 0) {
     perror("accept");
     exit(1);
 }
 
 printf("client connected from %s:%d (conn_fd = %d)\n",
-       inet_ntoa(client.sin_addr),
-       ntohs(client.sin_port),
+       inet_ntoa(client_addr.sin_addr),
+       ntohs(client_addr.sin_port),
        conn_fd);
 
 close(conn_fd);
 close(listen_fd);
 ```
 
-### `struct sockaddr_in client;`
+### `struct sockaddr_in client_addr;`
 
 `accept()` writes the client's address into this. Note the reversal from step 0:
 there, a `sockaddr_in` was *filled in* to say where to bind; here an *empty* one
@@ -37,7 +37,7 @@ is handed over to be filled in. Same struct, opposite direction.
 Passing `NULL, NULL` instead is legal and common when the client's address is not
 needed. It is passed here only to make the address visible.
 
-### `socklen_t client_len = sizeof(client);`
+### `socklen_t client_len = sizeof(client_addr);`
 
 A **value-result argument** — an old C pattern that recurs throughout the socket
 API. It is set *before* the call to mean "this is how much room I have", and the
@@ -125,6 +125,47 @@ collected — `close(conn_fd)` discarded the buffer along with the connection.
 The bytes are real, they arrive on their own, and they wait. Step 2 finally reads
 them.
 
+## So what is "the client", in this code?
+
+Three different things get called the client, and only one of them exists inside
+the program:
+
+| What | Where it lives | What can be done with it |
+|------|----------------|--------------------------|
+| the client *program* — curl, `nc`, a browser | another process, maybe another machine | nothing; it is never seen |
+| the *connection* | in the kernel, as the 4-tuple `127.0.0.1:52110 -> 127.0.0.1:8080` | nothing directly |
+| `conn_fd` | this process | `read`, `write`, `close` |
+
+**In this code the client is `conn_fd`, the integer 4.** Nothing else represents
+it. There is no client object and no session.
+
+The proof is to run the same unchanged server against three different clients:
+
+```
+$ curl -s localhost:8080
+client connected from 127.0.0.1:52110 (conn_fd = 4)
+
+$ echo "" | nc -q0 localhost 8080
+client connected from 127.0.0.1:52124 (conn_fd = 4)
+
+$ python3 -c "import socket; socket.create_connection(('127.0.0.1',8080)).close()"
+client connected from 127.0.0.1:52136 (conn_fd = 4)
+```
+
+Identical output every time, apart from the ephemeral port. The server cannot
+distinguish curl from `nc` from a Python script, because it never receives a
+program — only a file descriptor. This is also what makes step 12 testable: a
+handmade broken request typed into `nc` is indistinguishable, to the server, from
+a real client misbehaving.
+
+And `client_addr` is not the client. It is six bytes describing where the other end
+is: caller ID, not the caller. Passing `NULL, NULL` to `accept()` removes it and
+changes nothing.
+
+See [glossary: client](glossary.md#client) for why "client" is a role rather than a
+kind of program, and why the absence of any client memory here is the reason
+cookies exist.
+
 ## Checks
 
 1. `listen_fd` is 3 and `conn_fd` is 4. A second client connects — which
@@ -132,3 +173,5 @@ them.
 2. Why `Empty reply from server` this time instead of step 0's infinite hang?
 3. What is `client_len` before the call, what is it after, and why is it a pointer?
 4. Where did the 77 bytes of request data go this time?
+5. What single call decides which end of a connection is the client and which is
+   the server? What distinguishes them once the connection is established?
