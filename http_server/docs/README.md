@@ -1,9 +1,16 @@
 # Building an HTTP server from scratch, in C
 
-The goal of this project is **not** a fast or complete HTTP server. The goal is
-to understand every single line. So it is built in very small steps, and each
-step must be provable from outside the program with a real tool (`ss`, `curl`,
-`nc`) before moving on.
+The goal is **not** a fast or complete HTTP server. The goal is to understand
+every single line. So it is built in very small steps, and each step must be
+provable from outside the program with a real tool (`ss`, `curl`, `nc`) before
+moving on to the next.
+
+## Where we are
+
+Steps 0 and 1 are done. **Step 2 is next: read the request bytes and print them.**
+
+The full plan — every step from an empty file to a server worth calling good — is
+in [plan.md](plan.md). It is the source of truth for status and ordering.
 
 ## Ground rules
 
@@ -12,23 +19,28 @@ step must be provable from outside the program with a real tool (`ss`, `curl`,
 - Do not start step N+1 until step N can be explained out loud without looking.
 - No comments in the source. Explanations live here and in commit messages.
 
-## Roadmap
+## The six phases
 
-| Step | What it does | How it is proven | Status |
-|------|--------------|------------------|--------|
-| [0](step-00-listening-socket.md) | `socket` + `bind` + `listen`, then sleep | `ss -ltn \| grep 8080` shows the port held | done |
-| [1](step-01-accept-a-connection.md) | `accept` one connection, print who it is, close, exit | `curl` says `Empty reply from server` | done |
-| 2 | `read` the bytes and print them raw | the real HTTP request text appears on screen | next |
-| 3 | `write` a hardcoded response | `curl` prints the body | |
-| 4 | wrap it in a loop | three `curl` runs in a row all answered | |
-| 5 | parse the request line (method, path, version) | echo the path back in the body | |
-| 6 | route `/` and `/hello`, else 404 | `curl` a bad path | |
-| 7 | parse headers into key/value | print `Host` back | |
-| 8 | serve a file from disk | `curl localhost:8080/index.html` | |
-| 9 | read a `POST` body | `curl -d "name=jeff" ...` | |
+| Phase | Steps | What it is about |
+|-------|-------|------------------|
+| 1 — Transport | 0-4 | moving bytes in and out of a socket; HTTP not involved yet |
+| 2 — Protocol | 5-9 | giving those bytes meaning: method, path, headers, files |
+| 3 — Correctness | 10-14 | fixing the bugs phase 2 deliberately left in place |
+| 4 — HTTP/1.1 | 15-18 | what the version string actually promises |
+| 5 — Concurrency | 19-23 | more than one client at a time, worst design first |
+| 6 — Optional | 24-28 | routing, TLS, benchmarking, tests |
 
-Steps 0-4 build the *transport*: getting bytes in and out of a socket. Steps 5-9
-build the *protocol*: giving those bytes meaning.
+## Documentation
+
+One file per completed step, recording the line-by-line reasoning and the real
+terminal output that proved it:
+
+- [Step 0 — a listening socket on port 8080](step-00-listening-socket.md)
+- [Step 1 — accept one connection](step-01-accept-a-connection.md)
+
+Plus [glossary.md](glossary.md) for the vocabulary that keeps coming back: file
+descriptors, network byte order, value-result arguments, byte stream, backlog,
+accept queue, ephemeral port.
 
 ## Build and run
 
@@ -45,9 +57,7 @@ curl -v localhost:8080     # talk to it
 nc localhost 8080          # talk to it by hand
 ```
 
+`nc` matters more than `curl` from step 10 onward: it is the only easy way to send
+a deliberately broken or deliberately slow request.
+
 The compiled `server` binary is gitignored. Only `server.c` is tracked.
-
-## Reference
-
-- [Glossary](glossary.md) — file descriptors, byte order, and other vocabulary
-  that keeps coming back.
