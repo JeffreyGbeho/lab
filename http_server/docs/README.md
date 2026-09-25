@@ -7,7 +7,7 @@ moving on to the next.
 
 ## Where we are
 
-Steps 0 and 1 are done. **Step 2 is next: read the request bytes and print them.**
+Steps 0 to 2 are done. **Step 3 is next: write a hardcoded response.**
 
 The full plan — every step from an empty file to a server worth calling good — is
 in [plan.md](plan.md). It is the source of truth for status and ordering.
@@ -37,6 +37,7 @@ terminal output that proved it:
 
 - [Step 0 — a listening socket on port 8080](step-00-listening-socket.md)
 - [Step 1 — accept one connection](step-01-accept-a-connection.md)
+- [Step 2 — read the request and print it raw](step-02-read-the-request.md)
 
 Plus [glossary.md](glossary.md) for the vocabulary that keeps coming back: file
 descriptors, network byte order, value-result arguments, byte stream, backlog,

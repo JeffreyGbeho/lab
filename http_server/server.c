@@ -51,6 +51,29 @@ int main(void) {
            ntohs(client_addr.sin_port),
            conn_fd);
 
+    char buf[4096];
+    ssize_t n = read(conn_fd, buf, sizeof(buf) - 1);
+    if (n < 0) {
+        perror("read");
+        exit(1);
+    }
+    buf[n] = '\0';
+
+    printf("read() returned %zd bytes\n", n);
+    printf("----- raw -----\n%s----- end -----\n", buf);
+
+    printf("----- with line endings made visible -----\n");
+    for (ssize_t i = 0; i < n; i++) {
+        if (buf[i] == '\r') {
+            printf("\\r");
+        } else if (buf[i] == '\n') {
+            printf("\\n\n");
+        } else {
+            putchar(buf[i]);
+        }
+    }
+    printf("----- end -----\n");
+
     close(conn_fd);
     close(listen_fd);
     return 0;

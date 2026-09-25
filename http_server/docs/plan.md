@@ -24,7 +24,7 @@ answers every request with the same hardcoded reply, forever.
 |------|------|-------|----------|
 | 0 ✅ | `socket` + `bind` + `listen`, then sleep | `ss -ltn \| grep 8080` shows `LISTEN 0 16` | the four calls, and that listening is not accepting |
 | 1 ✅ | `accept` one connection, print the client, close, exit | `curl` says `Empty reply from server` | `accept` returns a **second** socket; the kernel builds connections without us |
-| 2 | `read` into a buffer and print it raw | the real HTTP request text appears on screen | a request is just bytes; seeing the protocol for the first time |
+| 2 ✅ | `read` into a buffer and print it raw | the real HTTP request text appears on screen | a request is just bytes; seeing the protocol for the first time |
 | 3 | `write` a hardcoded response | `curl localhost:8080` prints a body | `\r\n`, the status line, and why `Content-Length` decides if a browser hangs |
 | 4 | wrap `accept`/`read`/`write` in an infinite loop | three `curl` runs in a row are all answered | where the loop starts; which socket to close and which to keep |
 
