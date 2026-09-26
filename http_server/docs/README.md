@@ -40,6 +40,9 @@ The code is the by-product. The goal is the skill of deciding what to build:
   drill, and how to build a library of systems worth copying.
 - [Decision records](decisions/README.md) — one file per decision that had a real
   alternative, with what it cost and what would change it.
+- [The five questions](thinking-out-loud.md) — the fixed sequence to run on any
+  decision (Outcome, Constraint, Options, Door, Bet), worked in full three times
+  on unrelated problems so the shape repeats until it is automatic.
 
 ## Understanding the code
 
