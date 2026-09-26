@@ -30,6 +30,17 @@ in [plan.md](plan.md). It is the source of truth for status and ordering.
 | 5 — Concurrency | 19-23 | more than one client at a time, worst design first |
 | 6 — Optional | 24-28 | routing, TLS, benchmarking, tests |
 
+## The real goal
+
+The code is the by-product. The goal is the skill of deciding what to build:
+
+- [Becoming the person who decides](architect-practice.md) — what architects
+  actually do, why there is no good design without constraints, how to turn a
+  business statement into a number, the question checklist, decomposition as a
+  drill, and how to build a library of systems worth copying.
+- [Decision records](decisions/README.md) — one file per decision that had a real
+  alternative, with what it cost and what would change it.
+
 ## Understanding the code
 
 If the code feels unwritable rather than unreadable, start here:
