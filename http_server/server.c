@@ -37,62 +37,53 @@ int main(void) {
 
     printf("listening on port 8080 (listen_fd = %d)\n", listen_fd);
 
-    struct sockaddr_in client_addr;
-    socklen_t client_len = sizeof(client_addr);
+    for (;;) {
+        struct sockaddr_in client_addr;
+        socklen_t client_len = sizeof(client_addr);
 
-    int conn_fd = accept(listen_fd, (struct sockaddr *)&client_addr, &client_len);
-    if (conn_fd < 0) {
-        perror("accept");
-        exit(1);
-    }
-
-    printf("client connected from %s:%d (conn_fd = %d)\n",
-           inet_ntoa(client_addr.sin_addr),
-           ntohs(client_addr.sin_port),
-           conn_fd);
-
-    char buf[4096];
-    ssize_t n = read(conn_fd, buf, sizeof(buf) - 1);
-    if (n < 0) {
-        perror("read");
-        exit(1);
-    }
-    buf[n] = '\0';
-
-    printf("read() returned %zd bytes\n", n);
-    printf("----- raw -----\n%s----- end -----\n", buf);
-
-    printf("----- with line endings made visible -----\n");
-    for (ssize_t i = 0; i < n; i++) {
-        if (buf[i] == '\r') {
-            printf("\\r");
-        } else if (buf[i] == '\n') {
-            printf("\\n\n");
-        } else {
-            putchar(buf[i]);
+        int conn_fd = accept(listen_fd, (struct sockaddr *)&client_addr, &client_len);
+        if (conn_fd < 0) {
+            perror("accept");
+            continue;
         }
+
+        printf("client connected from %s:%d (conn_fd = %d)\n",
+               inet_ntoa(client_addr.sin_addr),
+               ntohs(client_addr.sin_port),
+               conn_fd);
+
+        char buf[4096];
+        ssize_t n = read(conn_fd, buf, sizeof(buf) - 1);
+        if (n < 0) {
+            perror("read");
+            close(conn_fd);
+            continue;
+        }
+        buf[n] = '\0';
+
+        printf("read() returned %zd bytes\n", n);
+
+        const char *body = "Hello, world!\n";
+        char response[4096];
+        int response_len = snprintf(response, sizeof(response),
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: %zu\r\n"
+            "\r\n"
+            "%s",
+            strlen(body), body);
+
+        ssize_t written = write(conn_fd, response, response_len);
+        if (written < 0) {
+            perror("write");
+        } else {
+            printf("wrote %zd of %d bytes\n", written, response_len);
+        }
+
+        close(conn_fd);
+        printf("----- waiting for next client -----\n");
     }
-    printf("----- end -----\n");
 
-    const char *body = "Hello, world!\n";
-    char response[4096];
-    int response_len = snprintf(response, sizeof(response),
-        "HTTP/1.1 200 OK\r\n"
-        "Content-Type: text/plain\r\n"
-        "Content-Length: %zu\r\n"
-        "\r\n"
-        "%s",
-        strlen(body), body);
-
-    ssize_t written = write(conn_fd, response, response_len);
-    if (written < 0) {
-        perror("write");
-        exit(1);
-    }
-
-    printf("wrote %zd of %d bytes\n", written, response_len);
-
-    close(conn_fd);
     close(listen_fd);
     return 0;
 }
