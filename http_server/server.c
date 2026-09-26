@@ -74,6 +74,24 @@ int main(void) {
     }
     printf("----- end -----\n");
 
+    const char *body = "Hello, world!\n";
+    char response[4096];
+    int response_len = snprintf(response, sizeof(response),
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: text/plain\r\n"
+        "Content-Length: %zu\r\n"
+        "\r\n"
+        "%s",
+        strlen(body), body);
+
+    ssize_t written = write(conn_fd, response, response_len);
+    if (written < 0) {
+        perror("write");
+        exit(1);
+    }
+
+    printf("wrote %zd of %d bytes\n", written, response_len);
+
     close(conn_fd);
     close(listen_fd);
     return 0;
