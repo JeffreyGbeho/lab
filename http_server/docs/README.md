@@ -30,6 +30,18 @@ in [plan.md](plan.md). It is the source of truth for status and ordering.
 | 5 — Concurrency | 19-23 | more than one client at a time, worst design first |
 | 6 — Optional | 24-28 | routing, TLS, benchmarking, tests |
 
+## Understanding the code
+
+If the code feels unwritable rather than unreadable, start here:
+
+- [Reading the code](reading-the-code.md) — the whole program explained block by
+  block, plus the method: how to read a man page, what a system call is, the five
+  idioms this code repeats, how to debug without asking anyone, and the exercise
+  that turns reading into writing.
+- [The C you actually need here](c-toolkit.md) — the language subset this project
+  uses: buffers and `'\0'`, why there are four integer types, `sizeof`, `&` and
+  `*`, structs, casts, exit codes, `#include`.
+
 ## Documentation
 
 One file per completed step, recording the line-by-line reasoning and the real
