@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -99,6 +100,56 @@ int main(void) {
         version[version_len] = '\0';
 
         printf("method=%s path=%s version=%s\n", method, path, version);
+
+        struct { char name[64]; char value[256]; } headers[32];
+        int header_count = 0;
+        char *hp = eol + 2;
+
+        while (hp + 1 < buf + n && !(hp[0] == '\r' && hp[1] == '\n')) {
+            char *line_end = strstr(hp, "\r\n");
+            if (!line_end) {
+                fprintf(stderr, "malformed header (no CRLF)\n");
+                break;
+            }
+
+            char *colon = memchr(hp, ':', (size_t)(line_end - hp));
+            if (!colon) {
+                fprintf(stderr, "malformed header (no colon)\n");
+                break;
+            }
+
+            char *vp = colon + 1;
+            while (vp < line_end && *vp == ' ') vp++;
+
+            size_t name_len  = (size_t)(colon - hp);
+            size_t value_len = (size_t)(line_end - vp);
+
+            if (header_count < 32 &&
+                name_len < sizeof(headers[0].name) &&
+                value_len < sizeof(headers[0].value)) {
+                memcpy(headers[header_count].name, hp, name_len);
+                headers[header_count].name[name_len] = '\0';
+                memcpy(headers[header_count].value, vp, value_len);
+                headers[header_count].value[value_len] = '\0';
+                header_count++;
+            }
+
+            hp = line_end + 2;
+        }
+
+        printf("parsed %d headers:\n", header_count);
+        for (int i = 0; i < header_count; i++) {
+            printf("  %s: %s\n", headers[i].name, headers[i].value);
+        }
+
+        const char *host = NULL;
+        for (int i = 0; i < header_count; i++) {
+            if (strcasecmp(headers[i].name, "Host") == 0) {
+                host = headers[i].value;
+                break;
+            }
+        }
+        printf("Host header = %s\n", host ? host : "(none)");
 
         const char *body = "Hello, world!\n";
         char response[4096];
