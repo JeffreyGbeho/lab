@@ -7,6 +7,17 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+static void send_error(int conn_fd, int code, const char *reason) {
+    char resp[128];
+    int len = snprintf(resp, sizeof(resp),
+        "HTTP/1.1 %d %s\r\n"
+        "Content-Length: 0\r\n"
+        "Connection: close\r\n"
+        "\r\n",
+        code, reason);
+    write(conn_fd, resp, len);
+}
+
 int main(void) {
     setvbuf(stdout, NULL, _IOLBF, 0);
 
@@ -72,6 +83,7 @@ int main(void) {
 
         if (!sp1 || !sp2 || !eol) {
             fprintf(stderr, "malformed request line\n");
+            send_error(conn_fd, 400, "Bad Request");
             close(conn_fd);
             continue;
         }
@@ -88,6 +100,7 @@ int main(void) {
             path_len >= sizeof(path) ||
             version_len >= sizeof(version)) {
             fprintf(stderr, "request line token too long\n");
+            send_error(conn_fd, 400, "Bad Request");
             close(conn_fd);
             continue;
         }
@@ -104,6 +117,7 @@ int main(void) {
         struct { char name[64]; char value[256]; } headers[32];
         int header_count = 0;
         int header_error = 0;
+        int header_status = 400;
         char *hp = eol + 2;
 
         while (hp + 1 < buf + n && !(hp[0] == '\r' && hp[1] == '\n')) {
@@ -127,21 +141,28 @@ int main(void) {
             size_t name_len  = (size_t)(colon - hp);
             size_t value_len = (size_t)(line_end - vp);
 
-            if (header_count < 32 &&
-                name_len < sizeof(headers[0].name) &&
-                value_len < sizeof(headers[0].value)) {
-                memcpy(headers[header_count].name, hp, name_len);
-                headers[header_count].name[name_len] = '\0';
-                memcpy(headers[header_count].value, vp, value_len);
-                headers[header_count].value[value_len] = '\0';
-                header_count++;
+            if (header_count >= 32 ||
+                name_len >= sizeof(headers[0].name) ||
+                value_len >= sizeof(headers[0].value)) {
+                fprintf(stderr, "too many headers or a header too large\n");
+                header_error = 1;
+                header_status = 431;
+                break;
             }
+
+            memcpy(headers[header_count].name, hp, name_len);
+            headers[header_count].name[name_len] = '\0';
+            memcpy(headers[header_count].value, vp, value_len);
+            headers[header_count].value[value_len] = '\0';
+            header_count++;
 
             hp = line_end + 2;
         }
 
         if (header_error || !(hp + 1 < buf + n) || !(hp[0] == '\r' && hp[1] == '\n')) {
             fprintf(stderr, "incomplete or malformed headers\n");
+            send_error(conn_fd, header_status,
+                       header_status == 431 ? "Request Header Fields Too Large" : "Bad Request");
             close(conn_fd);
             continue;
         }
