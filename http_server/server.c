@@ -103,18 +103,21 @@ int main(void) {
 
         struct { char name[64]; char value[256]; } headers[32];
         int header_count = 0;
+        int header_error = 0;
         char *hp = eol + 2;
 
         while (hp + 1 < buf + n && !(hp[0] == '\r' && hp[1] == '\n')) {
             char *line_end = strstr(hp, "\r\n");
             if (!line_end) {
                 fprintf(stderr, "malformed header (no CRLF)\n");
+                header_error = 1;
                 break;
             }
 
             char *colon = memchr(hp, ':', (size_t)(line_end - hp));
             if (!colon) {
                 fprintf(stderr, "malformed header (no colon)\n");
+                header_error = 1;
                 break;
             }
 
@@ -137,19 +140,44 @@ int main(void) {
             hp = line_end + 2;
         }
 
+        if (header_error || !(hp + 1 < buf + n) || !(hp[0] == '\r' && hp[1] == '\n')) {
+            fprintf(stderr, "incomplete or malformed headers\n");
+            close(conn_fd);
+            continue;
+        }
+
+        char *body_start = hp + 2;
+
         printf("parsed %d headers:\n", header_count);
         for (int i = 0; i < header_count; i++) {
             printf("  %s: %s\n", headers[i].name, headers[i].value);
         }
 
         const char *host = NULL;
+        size_t content_length = 0;
         for (int i = 0; i < header_count; i++) {
             if (strcasecmp(headers[i].name, "Host") == 0) {
                 host = headers[i].value;
-                break;
+            } else if (strcasecmp(headers[i].name, "Content-Length") == 0) {
+                content_length = (size_t)strtoul(headers[i].value, NULL, 10);
             }
         }
         printf("Host header = %s\n", host ? host : "(none)");
+
+        size_t header_bytes = (size_t)(body_start - buf);
+        size_t available = (n >= (ssize_t)header_bytes) ? (size_t)n - header_bytes : 0;
+        size_t body_len = content_length < available ? content_length : available;
+
+        printf("Content-Length = %zu, body bytes available in this read = %zu\n",
+               content_length, available);
+        if (content_length > available) {
+            fprintf(stderr,
+                "body incomplete in this read (have %zu of %zu) - not handled until the read loop\n",
+                available, content_length);
+        }
+        if (body_len > 0) {
+            printf("body: %.*s\n", (int)body_len, body_start);
+        }
 
         const char *body = "Hello, world!\n";
         char response[4096];
