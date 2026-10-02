@@ -176,28 +176,107 @@ int main(void) {
 
         const char *host = NULL;
         size_t content_length = 0;
+        int has_content_length = 0;
+        int is_chunked = 0;
         for (int i = 0; i < header_count; i++) {
             if (strcasecmp(headers[i].name, "Host") == 0) {
                 host = headers[i].value;
             } else if (strcasecmp(headers[i].name, "Content-Length") == 0) {
                 content_length = (size_t)strtoul(headers[i].value, NULL, 10);
+                has_content_length = 1;
+            } else if (strcasecmp(headers[i].name, "Transfer-Encoding") == 0) {
+                if (strcasecmp(headers[i].value, "chunked") == 0) {
+                    is_chunked = 1;
+                }
             }
         }
         printf("Host header = %s\n", host ? host : "(none)");
 
-        size_t header_bytes = (size_t)(body_start - buf);
-        size_t available = (n >= (ssize_t)header_bytes) ? (size_t)n - header_bytes : 0;
-        size_t body_len = content_length < available ? content_length : available;
-
-        printf("Content-Length = %zu, body bytes available in this read = %zu\n",
-               content_length, available);
-        if (content_length > available) {
+        if (is_chunked && has_content_length) {
             fprintf(stderr,
-                "body incomplete in this read (have %zu of %zu) - not handled until the read loop\n",
-                available, content_length);
+                "both Content-Length and Transfer-Encoding present - rejecting (request smuggling risk)\n");
+            send_error(conn_fd, 400, "Bad Request");
+            close(conn_fd);
+            continue;
         }
-        if (body_len > 0) {
-            printf("body: %.*s\n", (int)body_len, body_start);
+
+        if (is_chunked) {
+            char chunked_body[4096];
+            size_t chunked_body_len = 0;
+            char *cp = body_start;
+            char *buf_end = buf + n;
+            int chunk_error = 0;
+            int chunk_incomplete = 0;
+            int chunk_status = 400;
+
+            for (;;) {
+                char *size_line_end = memchr(cp, '\r', (size_t)(buf_end - cp));
+                if (!size_line_end || size_line_end + 1 >= buf_end || size_line_end[1] != '\n') {
+                    chunk_incomplete = 1;
+                    break;
+                }
+
+                char *size_endptr;
+                unsigned long chunk_size = strtoul(cp, &size_endptr, 16);
+                if (size_endptr == cp || size_endptr != size_line_end) {
+                    fprintf(stderr, "malformed chunk size\n");
+                    chunk_error = 1;
+                    break;
+                }
+
+                char *chunk_data = size_line_end + 2;
+                if (chunk_size == 0) {
+                    break;
+                }
+                if (chunk_data + chunk_size + 2 > buf_end) {
+                    chunk_incomplete = 1;
+                    break;
+                }
+                if (chunk_data[chunk_size] != '\r' || chunk_data[chunk_size + 1] != '\n') {
+                    fprintf(stderr, "malformed chunk terminator\n");
+                    chunk_error = 1;
+                    break;
+                }
+                if (chunked_body_len + chunk_size >= sizeof(chunked_body)) {
+                    fprintf(stderr, "chunked body too large for buffer\n");
+                    chunk_error = 1;
+                    chunk_status = 413;
+                    break;
+                }
+
+                memcpy(chunked_body + chunked_body_len, chunk_data, chunk_size);
+                chunked_body_len += chunk_size;
+                cp = chunk_data + chunk_size + 2;
+            }
+
+            if (chunk_error) {
+                send_error(conn_fd, chunk_status,
+                           chunk_status == 413 ? "Payload Too Large" : "Bad Request");
+                close(conn_fd);
+                continue;
+            }
+            if (chunk_incomplete) {
+                fprintf(stderr,
+                    "chunked body incomplete in this read - not handled until the read loop\n");
+            }
+
+            chunked_body[chunked_body_len] = '\0';
+            printf("decoded chunked body (%zu bytes): %s\n", chunked_body_len, chunked_body);
+        } else {
+            size_t header_bytes = (size_t)(body_start - buf);
+            size_t available = (n >= (ssize_t)header_bytes) ? (size_t)n - header_bytes : 0;
+            size_t body_len = content_length < available ? content_length : available;
+
+            printf("Content-Length = %zu, body bytes available in this read = %zu\n",
+                   content_length, available);
+            if (content_length > available) {
+                fprintf(stderr,
+                    "body incomplete in this read (have %zu of %zu) - not handled until the read loop\n",
+                    available, content_length);
+            }
+            if (body_len > 0) {
+                printf("body: %.*s\n", (int)body_len, body_start);
+            }
         }
 
         const char *body = "Hello, world!\n";
